@@ -1,21 +1,18 @@
-package internal
+package collector
 
 import (
 	"time"
 
 	"github.com/leonard-atorough/tsdb/internal/models"
-	"github.com/shirou/gopsutil/v4/cpu"
-	"github.com/shirou/gopsutil/v4/mem"
 )
 
 type Collector interface {
 	Collect() ([]models.TimeSeriesData, error)
 }
 
-type MockCollector struct {} // MockCollector is a mock implementation of the Collector interface for testing purposes.
+type MockCollector struct{}
 
 func (mc *MockCollector) Collect() ([]models.TimeSeriesData, error) {
-	// Return some mock data for testing purposes.
 	mockData := []models.TimeSeriesData{
 		{
 			Measurement: "cpu",
@@ -42,51 +39,54 @@ func (mc *MockCollector) Collect() ([]models.TimeSeriesData, error) {
 }
 
 type SystemCollector struct {
-	CPUDuration time.Duration // Duration for CPU usage measurement
+	metrics  *SystemMetrics
+	hostname string
 }
 
-func NewSystemCollector(cpuDuration time.Duration) *SystemCollector {
+func NewSystemCollector(cpuDuration time.Duration, hostname string) *SystemCollector {
 	return &SystemCollector{
-		CPUDuration: cpuDuration,
+		metrics:  NewSystemMetrics(cpuDuration),
+		hostname: hostname,
 	}
 }
 
 func (sc *SystemCollector) Collect() ([]models.TimeSeriesData, error) {
-	processMetrics := []models.TimeSeriesData{}
+	var data []models.TimeSeriesData
 
-	cpuPercentages, err := cpu.Percent(sc.CPUDuration, false)
+	cpuUsage, err := sc.metrics.CPUUsage()
 	if err != nil {
 		return nil, err
 	}
 
-	vmStat, err := mem.VirtualMemory()
-	if err != nil {
-		return nil, err
+	if sc.hostname == "" {
+		sc.hostname = "localhost"
 	}
-
-	cpuData := models.TimeSeriesData{
+	
+	data = append(data, models.TimeSeriesData{
 		Measurement: "cpu",
 		TagSet: map[string]string{
-			"host": "localhost",
+			"host": sc.hostname,
 		},
 		FieldSet: map[string]any{
-			"usage": cpuPercentages[0],
+			"usage": cpuUsage,
 		},
 		Timestamp: time.Now().UnixMilli(),
-	}
-	processMetrics = append(processMetrics, cpuData)
+	})
 
-	memoryData := models.TimeSeriesData{
+	memUsage, err := sc.metrics.MemoryUsage()
+	if err != nil {
+		return nil, err
+	}
+	data = append(data, models.TimeSeriesData{
 		Measurement: "memory",
 		TagSet: map[string]string{
-			"host": "localhost",
+			"host": sc.hostname,
 		},
 		FieldSet: map[string]any{
-			"usage": vmStat.UsedPercent,
+			"usage": memUsage,
 		},
 		Timestamp: time.Now().UnixMilli(),
-	}
-	processMetrics = append(processMetrics, memoryData)
+	})
 
-	return processMetrics, nil
+	return data, nil
 }

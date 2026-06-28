@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 
@@ -14,38 +13,43 @@ type FileWriter struct {
 }
 
 // NewFileWriter creates a new FileWriter instance for the specified file path.
-func NewFileWriter(path string) *FileWriter {
-	projectRoot, err := GetProjectRoot()
-	if err != nil {
-		log.Fatalf("Error finding project root: %v", err)
+func NewFileWriter(path string) (*FileWriter, error) {
+	var fullPath string
+
+	if filepath.IsAbs(path) {
+		fullPath = path
+	} else {
+		projectRoot, err := GetProjectRoot()
+		if err != nil {
+			return nil, err
+		}
+		fullPath = filepath.Join(projectRoot, path)
 	}
-	fullPath := filepath.Join(projectRoot, path)
-	err = os.MkdirAll(filepath.Dir(fullPath), os.ModePerm)
+
+	err := os.MkdirAll(filepath.Dir(fullPath), os.ModePerm)
 	if err != nil {
-		log.Fatalf("Error creating directory for file: %v", err)
+		return nil, err
 	}
 
 	f, err := os.OpenFile(fullPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Fatalf("Error opening file: %v", err)
+		return nil, err
 	}
 
 	return &FileWriter{
 		file: f,
 		path: fullPath,
-	}
+	}, nil
 }
 
 // WriteData writes a TimeSeriesData instance to the file in JSON format, appending a newline.
 func (fw *FileWriter) WriteData(data models.TimeSeriesData) error {
 	jsonData, err := models.MarshalLine(&data)
 	if err != nil {
-		log.Fatalf("Error marshalling data: %v", err)
 		return err
 	}
 	_, err = fw.file.Write(jsonData)
 	if err != nil {
-		log.Fatalf("Error writing data to file: %v", err)
 		return err
 	}
 	return nil
@@ -55,7 +59,6 @@ func (fw *FileWriter) WriteData(data models.TimeSeriesData) error {
 func (fw *FileWriter) Close() error {
 	err := fw.file.Close()
 	if err != nil {
-		log.Fatalf("Error closing file: %v", err)
 		return err
 	}
 	return nil

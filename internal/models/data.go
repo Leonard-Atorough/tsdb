@@ -9,11 +9,3 @@ type TimeSeriesData struct {
 	FieldSet    map[string]any `json:"fields"`
 	Timestamp   int64 `json:"ts"`
 }
-
-// TimeSeriesDataQuery is a struct that represents a query for time series data.
-// It contains a collection of TimeSeriesData and a query string.
-// Not currently used, but could be useful for future implementations.
-type TimeSeriesDataQuery struct {
-	Collection []TimeSeriesData
-	Query      string
-}

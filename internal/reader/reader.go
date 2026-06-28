@@ -2,7 +2,6 @@ package reader
 
 import (
 	"bufio"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -14,26 +13,39 @@ type Reader struct {
 	filePath string
 }
 
-func NewReader(filePath string) *Reader {
-	projectRoot, err := internal.GetProjectRoot()
-	if err != nil {
-		log.Fatalf("Error finding project root: %v", err)
-	}
-	fullPath := filepath.Join(projectRoot, filePath)
-	return &Reader{
-		filePath: fullPath,
+func NewReader(filePath string) (*Reader, error) {
+	if filepath.IsAbs(filePath) {
+		return &Reader{
+			filePath: filePath,
+		}, nil
+	} else {
+		projectRoot, err := internal.GetProjectRoot()
+		if err != nil {
+			return nil, err
+		}
+		fullPath := filepath.Join(projectRoot, filePath)
+		return &Reader{
+			filePath: fullPath,
+		}, nil
 	}
 }
 
-func (r *Reader) Query(startTime, endTime string) ([]models.TimeSeriesData, error) {
-	startTimeMilli, err := internal.ConvertTimeToUnix(startTime)
+type QueryOpts struct {
+	from        string
+	to          string
+	Measurement string
+	tags        map[string]string
+}
+
+func (r *Reader) Query(opts QueryOpts) ([]models.TimeSeriesData, error) {
+	fromMs, err := internal.ConvertTimeToUnix(opts.from)
 	if err != nil {
 		return nil, err
 	}
-	if endTime == "" {
-		endTime = internal.GetCurrentTime()
+	if opts.to == "" {
+		opts.to = internal.GetCurrentTime()
 	}
-	endTimeMilli, err := internal.ConvertTimeToUnix(endTime)
+	toMs, err := internal.ConvertTimeToUnix(opts.to)
 	if err != nil {
 		return nil, err
 	}
@@ -50,15 +62,44 @@ func (r *Reader) Query(startTime, endTime string) ([]models.TimeSeriesData, erro
 		if err != nil {
 			return nil, err
 		}
-		if data.Timestamp >= startTimeMilli && data.Timestamp <= endTimeMilli {
-			results = append(results, *data)
-		}
-		if data.Timestamp > endTimeMilli {
+		if data.Timestamp > toMs {
 			break
 		}
+
+		if !matchesMeasurement(data.Measurement, opts.Measurement) {
+			continue
+		}
+
+		if !matchesTags(data.TagSet, opts.tags) {
+			continue
+		}
+
+		if !matchesTimeRange(data.Timestamp, fromMs, toMs) {
+			continue
+		}
+
+		results = append(results, *data)
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
 	return results, nil
+}
+
+// matchesTags checks if the tags in the data match the query tags.
+func matchesTags(dataTags map[string]string, queryTags map[string]string) bool {
+	for key, value := range queryTags {
+		if dataValue, exists := dataTags[key]; !exists || dataValue != value {
+			return false
+		}
+	}
+	return true
+}
+
+func matchesMeasurement(dataMeasurement string, queryMeasurement string) bool {
+	return dataMeasurement == queryMeasurement
+}
+
+func matchesTimeRange(timestamp int64, fromMs int64, toMs int64) bool {
+	return timestamp >= fromMs && timestamp <= toMs
 }

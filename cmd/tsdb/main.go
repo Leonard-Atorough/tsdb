@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/leonard-atorough/tsdb/internal"
+	"github.com/leonard-atorough/tsdb/internal/collector"
 	"github.com/leonard-atorough/tsdb/internal/models"
 )
 
@@ -13,7 +14,6 @@ func main() {
 		log.Fatal(err)
 	}
 }
-
 
 func start(directory string, tenantID string, pollingInterval time.Duration) {
 	config := &internal.Config{
@@ -24,10 +24,13 @@ func start(directory string, tenantID string, pollingInterval time.Duration) {
 
 	filePath := config.GetFilePath("data")
 
-	wr := internal.NewFileWriter(filePath)
+	wr, err := internal.NewFileWriter(filePath)
+	if err != nil {
+		log.Fatalf("Error creating file writer: %v", err)
+	}
 	defer wr.Close()
 
-	collector := internal.NewSystemCollector(pollingInterval)
+	collector := collector.NewSystemCollector(pollingInterval, "localhost")
 
 	ticker := time.NewTicker(pollingInterval) // Collect data based on the polling interval
 	defer ticker.Stop()

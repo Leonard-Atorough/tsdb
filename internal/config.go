@@ -12,5 +12,5 @@ type Config struct {
 }
 
 func (c *Config) GetFilePath(metric string) string {
-	return filepath.Join(c.DataDir, c.TenantID, metric+".json") // Construct the file path based on the data directory, tenant ID, and metric name
+	return filepath.Join(c.DataDir, c.TenantID, metric+".jsonl") // Construct the file path based on the data directory, tenant ID, and metric name
 }
