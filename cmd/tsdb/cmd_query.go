@@ -6,12 +6,16 @@ import (
 	"log"
 
 	"github.com/leonard-atorough/tsdb/internal"
+	"github.com/leonard-atorough/tsdb/internal/reader"
 	"github.com/spf13/cobra"
 )
 
 var (
-	startTime string
-	endTime   string
+	startTime   string
+	endTime     string
+	agg         []string
+	field       string
+	measurement string
 )
 
 var queryCmd = &cobra.Command{
@@ -24,33 +28,53 @@ var queryCmd = &cobra.Command{
 			TenantID: tenantID,
 		}
 		filePath := config.GetFilePath("data")
-		reader := internal.NewReader(filePath)
-		
-		results, err := reader.Query(startTime, endTime)
-		if err != nil {
-			log.Fatalf("Error querying data: %v", err)
-		}
-		
-		// Output results as JSON
-		fmt.Fprintf(log.Writer(), "Found %d results\n", len(results))
-		for _, result := range results {
-			jsonBytes, err := json.Marshal(result)
-			if err != nil {
-				log.Printf("Error marshaling result: %v", err)
-				continue
+		reader := reader.NewReader(filePath)
+
+		if agg != nil {
+			if field == "" {
+				log.Fatalf("Field name is required for aggregation")
 			}
-			fmt.Println(string(jsonBytes))
+			if measurement == "" {
+				log.Fatalf("Measurement name is required for aggregation")
+			}
+			result, err := reader.Aggregates(measurement, field, agg, startTime, endTime)
+			if err != nil {
+				log.Fatalf("Error performing aggregation: %v", err)
+			}
+
+			fmt.Fprintf(log.Writer(), "Aggregation results for measurement '%s' field '%s':\n", measurement, field)
+			for aggFunc, value := range result {
+				fmt.Fprintf(log.Writer(), "%s: %v\n", aggFunc, value)
+			}
+		} else {
+			result, err := reader.Query(startTime, endTime)
+			if err != nil {
+				log.Fatalf("Error querying data: %v", err)
+			}
+			// Output results as JSON
+			fmt.Fprintf(log.Writer(), "Found %d results\n", len(result))
+			for _, r := range result {
+				jsonBytes, err := json.Marshal(r)
+				if err != nil {
+					log.Printf("Error marshaling result: %v", err)
+					continue
+				}
+				fmt.Println(string(jsonBytes))
+			}
 		}
+
 	},
 }
 
 func init() {
-	queryCmd.Flags().StringVar(&startTime, "start", "", "Start time (RFC3339 format)")
-	queryCmd.Flags().StringVar(&endTime, "end", "", "End time (RFC3339 format)")
-	queryCmd.Flags().StringVar(&dataDir, "datadir", "data", "Data directory path")
-	queryCmd.Flags().StringVar(&tenantID, "tenant", "tenant1", "Tenant ID")
+	queryCmd.Flags().StringVarP(&startTime, "start", "s", "", "Start time (RFC3339 format)")
+	queryCmd.Flags().StringVarP(&endTime, "end", "e", "", "End time (RFC3339 format)")
+	queryCmd.Flags().StringVarP(&dataDir, "datadir", "d", "data", "Data directory path")
+	queryCmd.Flags().StringVarP(&tenantID, "tenant", "t", "tenant1", "Tenant ID")
+	queryCmd.Flags().StringArrayVarP(&agg, "agg", "a", []string{}, "Aggregation function (avg, sum, count, min, max)")
+	queryCmd.Flags().StringVarP(&measurement, "measurement", "m", "", "Measurement name for aggregation")
+	queryCmd.Flags().StringVarP(&field, "field", "f", "", "Field name for aggregation")
 	queryCmd.MarkFlagRequired("start")
-	queryCmd.MarkFlagRequired("end")
 	queryCmd.MarkFlagRequired("datadir")
 	queryCmd.MarkFlagRequired("tenant")
 }

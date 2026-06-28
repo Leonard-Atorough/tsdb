@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// getProjectRoot finds the project root by locating go.mod starting from the current working directory.
-func getProjectRoot() (string, error) {
+// GetProjectRoot finds the project root by locating go.mod starting from the current working directory.
+func GetProjectRoot() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -26,10 +26,14 @@ func getProjectRoot() (string, error) {
 	}
 }
 
-func convertTimeToUnix(timeStr string) (int64, error) {
+func ConvertTimeToUnix(timeStr string) (int64, error) {
 	parsedTime, err := time.Parse(time.RFC3339, timeStr)
 	if err != nil {
 		return 0, err
 	}
 	return parsedTime.UnixMilli(), nil
+}
+
+func GetCurrentTime() string {
+	return time.Now().Format(time.RFC3339)
 }

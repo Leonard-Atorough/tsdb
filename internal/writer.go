@@ -13,11 +13,9 @@ type FileWriter struct {
 	path string
 }
 
-
-
 // NewFileWriter creates a new FileWriter instance for the specified file path.
 func NewFileWriter(path string) *FileWriter {
-	projectRoot, err := getProjectRoot()
+	projectRoot, err := GetProjectRoot()
 	if err != nil {
 		log.Fatalf("Error finding project root: %v", err)
 	}

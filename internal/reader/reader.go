@@ -1,4 +1,4 @@
-package internal
+package reader
 
 import (
 	"bufio"
@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/leonard-atorough/tsdb/internal"
 	"github.com/leonard-atorough/tsdb/internal/models"
 )
 
@@ -14,7 +15,7 @@ type Reader struct {
 }
 
 func NewReader(filePath string) *Reader {
-	projectRoot, err := getProjectRoot()
+	projectRoot, err := internal.GetProjectRoot()
 	if err != nil {
 		log.Fatalf("Error finding project root: %v", err)
 	}
@@ -25,11 +26,14 @@ func NewReader(filePath string) *Reader {
 }
 
 func (r *Reader) Query(startTime, endTime string) ([]models.TimeSeriesData, error) {
-	startTimeMilli, err := convertTimeToUnix(startTime)
+	startTimeMilli, err := internal.ConvertTimeToUnix(startTime)
 	if err != nil {
 		return nil, err
 	}
-	endTimeMilli, err := convertTimeToUnix(endTime)
+	if endTime == "" {
+		endTime = internal.GetCurrentTime()
+	}
+	endTimeMilli, err := internal.ConvertTimeToUnix(endTime)
 	if err != nil {
 		return nil, err
 	}
