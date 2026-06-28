@@ -1,36 +1,69 @@
 package reader
 
-import "github.com/leonard-atorough/tsdb/internal/models"
+import (
+	"errors"
 
-func (r *Reader) Avg(measurement, field string, startTime, endTime string) (float64, error) {
-	points, err := r.Query(startTime, endTime)
+	"github.com/leonard-atorough/tsdb/internal/models"
+)
+
+type AggregateOpts struct {
+	Field       string
+	Measurement string
+	Funcs       []string
+	From        string
+	To          string
+	Tags        map[string]string
+}
+
+func (r *Reader) Avg(opts AggregateOpts) (float64, error) {
+	points, err := r.Query(QueryOpts{
+		From:        opts.From,
+		To:          opts.To,
+		Measurement: opts.Measurement,
+		Tags:        opts.Tags,
+	})
 	if err != nil {
 		return 0, err
 	}
 
-	return sumPoints(points, measurement, field) / float64(countPoints(points, measurement, field)), nil
+	return sumPoints(points, opts.Field) / float64(countPoints(points, opts.Field)), nil
 }
 
-func (r *Reader) Sum(measurement, field string, startTime, endTime string) (float64, error) {
-	points, err := r.Query(startTime, endTime)
+func (r *Reader) Sum(opts AggregateOpts) (float64, error) {
+	points, err := r.Query(QueryOpts{
+		From:        opts.From,
+		To:          opts.To,
+		Measurement: opts.Measurement,
+		Tags:        opts.Tags,
+	})
 	if err != nil {
 		return 0, err
 	}
 
-	return sumPoints(points, measurement, field), nil
+	return sumPoints(points, opts.Field), nil
 }
 
-func (r *Reader) Count(measurement, field string, startTime, endTime string) (int, error) {
-	points, err := r.Query(startTime, endTime)
+func (r *Reader) Count(opts AggregateOpts) (int, error) {
+	points, err := r.Query(QueryOpts{
+		From:        opts.From,
+		To:          opts.To,
+		Measurement: opts.Measurement,
+		Tags:        opts.Tags,
+	})
 	if err != nil {
 		return 0, err
 	}
 
-	return countPoints(points, measurement, field), nil
+	return countPoints(points, opts.Field), nil
 }
 
-func (r *Reader) Min(measurement, field string, startTime, endTime string) (float64, error) {
-	points, err := r.Query(startTime, endTime)
+func (r *Reader) Min(opts AggregateOpts) (float64, error) {
+	points, err := r.Query(QueryOpts{
+		From:        opts.From,
+		To:          opts.To,
+		Measurement: opts.Measurement,
+		Tags:        opts.Tags,
+	})
 	if err != nil {
 		return 0, err
 	}
@@ -38,20 +71,25 @@ func (r *Reader) Min(measurement, field string, startTime, endTime string) (floa
 	var min float64
 	first := true
 	for _, point := range points {
-		if matchesMeasurementAndField(point, measurement, field) {
+		if point.FieldSet[opts.Field] != nil {
 			if first {
-				min = point.FieldSet[field].(float64)
+				min = point.FieldSet[opts.Field].(float64)
 				first = false
-			} else if point.FieldSet[field].(float64) < min {
-				min = point.FieldSet[field].(float64)
+			} else if point.FieldSet[opts.Field].(float64) < min {
+				min = point.FieldSet[opts.Field].(float64)
 			}
 		}
 	}
 	return min, nil
 }
 
-func (r *Reader) Max(measurement, field string, startTime, endTime string) (float64, error) {
-	points, err := r.Query(startTime, endTime)
+func (r *Reader) Max(opts AggregateOpts) (float64, error) {
+	points, err := r.Query(QueryOpts{
+		From:        opts.From,
+		To:          opts.To,
+		Measurement: opts.Measurement,
+		Tags:        opts.Tags,
+	})
 	if err != nil {
 		return 0, err
 	}
@@ -59,64 +97,81 @@ func (r *Reader) Max(measurement, field string, startTime, endTime string) (floa
 	var max float64
 	first := true
 	for _, point := range points {
-		if matchesMeasurementAndField(point, measurement, field) {
+		if point.FieldSet[opts.Field] != nil {
 			if first {
-				max = point.FieldSet[field].(float64)
+				max = point.FieldSet[opts.Field].(float64)
 				first = false
-			} else if point.FieldSet[field].(float64) > max {
-				max = point.FieldSet[field].(float64)
+			} else if point.FieldSet[opts.Field].(float64) > max {
+				max = point.FieldSet[opts.Field].(float64)
 			}
 		}
 	}
 	return max, nil
 }
 
-func (r *Reader) Aggregates(measurement, field string, funcs []string, startTime, endTime string) (map[string]float64, error) {
+func (r *Reader) Aggregates(opts AggregateOpts) (map[string]float64, error) {
 	results := make(map[string]float64)
+	var errs []error
 
-	for _, fn := range funcs {
+	for _, fn := range opts.Funcs {
 		switch fn {
 		case "sum":
-			results["sum"], _ = r.Sum(measurement, field, startTime, endTime)
+			val, err := r.Sum(opts)
+			if err != nil {
+				errs = append(errs, err)
+			} else {
+				results["sum"] = val
+			}
 		case "count":
-			count, _ := r.Count(measurement, field, startTime, endTime)
-			results["count"] = float64(count)
+			count, err := r.Count(opts)
+			if err != nil {
+				errs = append(errs, err)
+			} else {
+				results["count"] = float64(count)
+			}
 		case "avg":
-			results["avg"], _ = r.Avg(measurement, field, startTime, endTime)
+			val, err := r.Avg(opts)
+			if err != nil {
+				errs = append(errs, err)
+			} else {
+				results["avg"] = val
+			}
 		case "min":
-			results["min"], _ = r.Min(measurement, field, startTime, endTime)
+			val, err := r.Min(opts)
+			if err != nil {
+				errs = append(errs, err)
+			} else {
+				results["min"] = val
+			}
 		case "max":
-			results["max"], _ = r.Max(measurement, field, startTime, endTime)
+			val, err := r.Max(opts)
+			if err != nil {
+				errs = append(errs, err)
+			} else {
+				results["max"] = val
+			}
 		}
 	}
 
-	return results, nil
+	return results, errors.Join(errs...)
 }
 
-func sumPoints(points []models.TimeSeriesData, measurement, field string) float64 {
+func sumPoints(points []models.TimeSeriesData, field string) float64 {
 	var sum float64
 	for _, point := range points {
-		if matchesMeasurementAndField(point, measurement, field) {
+		if point.FieldSet[field] != nil {
 			sum += point.FieldSet[field].(float64)
 		}
 	}
 	return sum
 }
 
-func countPoints(points []models.TimeSeriesData, measurement, field string) int {
+func countPoints(points []models.TimeSeriesData, field string) int {
 	var count int
 	for _, point := range points {
-		if matchesMeasurementAndField(point, measurement, field) {
+		if point.FieldSet[field] != nil {
 			count++
 		}
 	}
 	return count
-}
-
-func matchesMeasurementAndField(point models.TimeSeriesData, measurement, field string) bool {
-	if point.Measurement != measurement {
-		return false
-	}
-	_, ok := point.FieldSet[field]
-	return ok
 }

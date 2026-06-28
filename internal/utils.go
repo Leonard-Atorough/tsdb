@@ -34,6 +34,11 @@ func ConvertTimeToUnix(timeStr string) (int64, error) {
 	return parsedTime.UnixMilli(), nil
 }
 
+func ConvertUnixToTime(unixMs int64) string {
+	t := time.UnixMilli(unixMs)
+	return t.Format(time.RFC3339)
+}
+
 func GetCurrentTime() string {
 	return time.Now().Format(time.RFC3339)
 }

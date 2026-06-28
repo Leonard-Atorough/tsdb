@@ -28,7 +28,10 @@ var queryCmd = &cobra.Command{
 			TenantID: tenantID,
 		}
 		filePath := config.GetFilePath("data")
-		reader := reader.NewReader(filePath)
+		r, err := reader.NewReader(filePath)
+		if err != nil {
+			log.Fatalf("Error creating reader: %v", err)
+		}
 
 		if agg != nil {
 			if field == "" {
@@ -37,7 +40,14 @@ var queryCmd = &cobra.Command{
 			if measurement == "" {
 				log.Fatalf("Measurement name is required for aggregation")
 			}
-			result, err := reader.Aggregates(measurement, field, agg, startTime, endTime)
+			opts := reader.AggregateOpts{
+				Field:       field,
+				Measurement: measurement,
+				Funcs:       agg,
+				From:        startTime,
+				To:          endTime,
+			}
+			result, err := r.Aggregates(opts)
 			if err != nil {
 				log.Fatalf("Error performing aggregation: %v", err)
 			}
@@ -47,7 +57,11 @@ var queryCmd = &cobra.Command{
 				fmt.Fprintf(log.Writer(), "%s: %v\n", aggFunc, value)
 			}
 		} else {
-			result, err := reader.Query(startTime, endTime)
+			opts := reader.QueryOpts{
+				From: startTime,
+				To:   endTime,
+			}
+			result, err := r.Query(opts)
 			if err != nil {
 				log.Fatalf("Error querying data: %v", err)
 			}

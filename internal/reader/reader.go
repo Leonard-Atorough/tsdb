@@ -31,21 +31,21 @@ func NewReader(filePath string) (*Reader, error) {
 }
 
 type QueryOpts struct {
-	from        string
-	to          string
+	From        string
+	To          string
 	Measurement string
-	tags        map[string]string
+	Tags        map[string]string
 }
 
 func (r *Reader) Query(opts QueryOpts) ([]models.TimeSeriesData, error) {
-	fromMs, err := internal.ConvertTimeToUnix(opts.from)
+	fromMs, err := internal.ConvertTimeToUnix(opts.From)
 	if err != nil {
 		return nil, err
 	}
-	if opts.to == "" {
-		opts.to = internal.GetCurrentTime()
+	if opts.To == "" {
+		opts.To = internal.GetCurrentTime()
 	}
-	toMs, err := internal.ConvertTimeToUnix(opts.to)
+	toMs, err := internal.ConvertTimeToUnix(opts.To)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,8 @@ func (r *Reader) Query(opts QueryOpts) ([]models.TimeSeriesData, error) {
 	for scanner.Scan() {
 		data, err := models.UnmarshalLine(scanner.Bytes())
 		if err != nil {
-			return nil, err
+			// Skip invalid or unparsable lines rather than failing the whole query.
+			continue
 		}
 		if data.Timestamp > toMs {
 			break
@@ -70,7 +71,7 @@ func (r *Reader) Query(opts QueryOpts) ([]models.TimeSeriesData, error) {
 			continue
 		}
 
-		if !matchesTags(data.TagSet, opts.tags) {
+		if !matchesTags(data.TagSet, opts.Tags) {
 			continue
 		}
 
@@ -96,10 +97,16 @@ func matchesTags(dataTags map[string]string, queryTags map[string]string) bool {
 	return true
 }
 
+// matchesMeasurement checks if the measurement in the data matches the query measurement.
 func matchesMeasurement(dataMeasurement string, queryMeasurement string) bool {
+	// If no measurement filter is provided, accept any measurement.
+	if queryMeasurement == "" {
+		return true
+	}
 	return dataMeasurement == queryMeasurement
 }
 
+// matchesTimeRange checks if the timestamp of the data point falls within the specified time range.
 func matchesTimeRange(timestamp int64, fromMs int64, toMs int64) bool {
 	return timestamp >= fromMs && timestamp <= toMs
 }
