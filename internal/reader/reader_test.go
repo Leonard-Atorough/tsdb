@@ -66,6 +66,29 @@ func TestReader_Query_ValidTimeRangeWithNoEndTime(t *testing.T) {
 	assert.Equal(t, "cpu", points[0].Measurement)
 }
 
+func TestReader_Query_ValidTimeRangeWithNoStartTime(t *testing.T) {
+	tempDir := t.TempDir()
+	testPath := filepath.Join(tempDir, "test_file.jsonl")
+
+	generateTestData(t, testPath, testData())
+	r, _ := NewReader(testPath)
+
+	points, _ := r.Query(QueryOpts{To: internal.ConvertUnixToTime(4000)})
+
+	assert.Len(t, points, 4, "Expected 4 valid points in the time range")
+	assert.Equal(t, "cpu", points[0].Measurement)
+}
+
+func TestReader_Query_ValidTimeRangeWithAgo(t *testing.T) {
+	// testing the "Ago" functionality by setting a time range of 3 seconds ago
+	// validate that from is set to 3 seconds before the current time and to is set to the current time
+	
+	r, _ := setupTestReader(t, testData())
+
+	// Don't bother testing data, just that the time range is set correctly
+
+}
+
 func TestReader_Query_InvalidTimeRange(t *testing.T) {
 	tempDir := t.TempDir()
 	testPath := filepath.Join(tempDir, "test_file.jsonl")
@@ -119,4 +142,26 @@ func TestReader_Query_WithTagFilter(t *testing.T) {
 	points, _ := r.Query(QueryOpts{From: internal.ConvertUnixToTime(0), To: internal.ConvertUnixToTime(4000), Tags: map[string]string{"host": "a"}})
 
 	assert.Len(t, points, 2, "Expected 2 points with tag host='a'")
+}
+
+func TestReader_Query_WithMultipleTags(t *testing.T) {
+	tempDir := t.TempDir()
+	testPath := filepath.Join(tempDir, "test_file.jsonl")
+
+	generateTestData(t, testPath, testData())
+
+	r, _ := NewReader(testPath)
+
+	points, _ := r.Query(QueryOpts{From: internal.ConvertUnixToTime(0), To: internal.ConvertUnixToTime(4000), Tags: map[string]string{"host": "a", "env": "staging"}})
+
+	assert.Len(t, points, 1, "Expected 1 point with tags host='a' and env='staging'")
+}
+
+func setupTestReader(t *testing.T, data []string) (*Reader, string) {
+	tempDir := t.TempDir()
+	testPath := filepath.Join(tempDir, "test_file.jsonl")
+
+	generateTestData(t, testPath, data)
+	r, _ := NewReader(testPath)
+	return r, testPath
 }

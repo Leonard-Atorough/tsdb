@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/leonard-atorough/tsdb/internal"
 	"github.com/leonard-atorough/tsdb/internal/models"
@@ -33,22 +34,17 @@ func NewReader(filePath string) (*Reader, error) {
 type QueryOpts struct {
 	From        string
 	To          string
+	Ago         string
 	Measurement string
 	Tags        map[string]string
 }
 
 func (r *Reader) Query(opts QueryOpts) ([]models.TimeSeriesData, error) {
-	fromMs, err := internal.ConvertTimeToUnix(opts.From)
+	fromMs, toMs, err := r.resolveTimeBounds(opts.From, opts.To, opts.Ago)
 	if err != nil {
 		return nil, err
 	}
-	if opts.To == "" {
-		opts.To = internal.GetCurrentTime()
-	}
-	toMs, err := internal.ConvertTimeToUnix(opts.To)
-	if err != nil {
-		return nil, err
-	}
+
 	file, err := os.Open(r.filePath)
 	if err != nil {
 		return nil, err
@@ -85,6 +81,51 @@ func (r *Reader) Query(opts QueryOpts) ([]models.TimeSeriesData, error) {
 		return nil, err
 	}
 	return results, nil
+}
+
+func (r *Reader) resolveTimeBounds(from, to, ago string) (int64, int64, error) {
+	now := time.Now()
+
+	// Resolve "To"
+	if to == "" {
+		toMs := now.UnixMilli()
+
+		// Resolve "From"
+		switch {
+		case from != "":
+			t, err := time.Parse(time.RFC3339, from)
+			if err != nil {
+				return 0, 0, err
+			}
+			fromMs := t.UnixMilli()
+			return fromMs, toMs, nil
+
+		case ago != "":
+			durationNs, err := time.ParseDuration(ago)
+			if err != nil {
+				return 0, 0, err
+			}
+			fromMs := toMs - int64(durationNs.Milliseconds())
+			return fromMs, toMs, nil
+
+		default:
+			// Default 1 week
+			fromMs := toMs - (7 * 24 * 60 * 60 * 1000)
+			return fromMs, toMs, nil
+		}
+	}
+
+	// Both from and to explicitly provided
+	fromTs, err := time.Parse(time.RFC3339, from)
+	if err != nil {
+		return 0, 0, err
+	}
+	toTs, err := time.Parse(time.RFC3339, to)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return fromTs.UnixMilli(), toTs.UnixMilli(), nil
 }
 
 // matchesTags checks if the tags in the data match the query tags.
